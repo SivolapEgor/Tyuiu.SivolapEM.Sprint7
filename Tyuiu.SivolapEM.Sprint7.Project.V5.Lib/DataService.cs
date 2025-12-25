@@ -8,11 +8,12 @@ namespace Tyuiu.SivolapEM.Sprint7.Project.V5.Lib
 {
     public class ItemModel
     {
-        public string Code { get; set; }          // Артикул
-        public string Name { get; set; }          // Название
-        public string Category { get; set; }      // НОВОЕ: Категория товара
+        public string Code { get; set; }
+        public string Name { get; set; }
+        public string Category { get; set; }
         public int Quantity { get; set; }
         public decimal Price { get; set; }
+        public decimal PurchasePrice { get; set; }
         public string Description { get; set; }
         public string Supplier { get; set; }
         public string DeliveryDate { get; set; }
@@ -20,6 +21,17 @@ namespace Tyuiu.SivolapEM.Sprint7.Project.V5.Lib
 
     public class DataService
     {
+        public void WriteLog(string action)
+        {
+            try
+            {
+                string path = "history.log";
+                string logLine = $"[{DateTime.Now:dd.MM.yyyy HH:mm:ss}] {action}";
+                File.AppendAllText(path, logLine + Environment.NewLine, Encoding.UTF8);
+            }
+            catch { }
+        }
+
         public List<ItemModel> LoadData(string path)
         {
             var list = new List<ItemModel>();
@@ -29,21 +41,23 @@ namespace Tyuiu.SivolapEM.Sprint7.Project.V5.Lib
             foreach (var line in lines)
             {
                 var parts = line.Split(';');
-                if (parts.Length >= 8) // Стало больше полей
+                if (parts.Length >= 9)
                 {
                     int.TryParse(parts[3], out int qty);
                     decimal.TryParse(parts[4].Replace('.', ','), out decimal price);
+                    decimal.TryParse(parts[5].Replace('.', ','), out decimal purchPrice);
 
                     list.Add(new ItemModel
                     {
                         Code = parts[0],
                         Name = parts[1],
-                        Category = parts[2], // Читаем категорию
+                        Category = parts[2],
                         Quantity = qty,
                         Price = price,
-                        Description = parts[5],
-                        Supplier = parts[6],
-                        DeliveryDate = parts[7]
+                        PurchasePrice = purchPrice,
+                        Description = parts[6],
+                        Supplier = parts[7],
+                        DeliveryDate = parts[8]
                     });
                 }
             }
@@ -55,44 +69,49 @@ namespace Tyuiu.SivolapEM.Sprint7.Project.V5.Lib
             var sb = new StringBuilder();
             foreach (var item in data)
             {
-                sb.AppendLine($"{item.Code};{item.Name};{item.Category};{item.Quantity};{item.Price};{item.Description};{item.Supplier};{item.DeliveryDate}");
+                sb.AppendLine($"{item.Code};{item.Name};{item.Category};{item.Quantity};{item.Price};{item.PurchasePrice};{item.Description};{item.Supplier};{item.DeliveryDate}");
             }
             File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
         }
 
-        // --- ЛОГИКА ---
-
-        // Добавление товара
         public void AddItem(List<ItemModel> data, ItemModel newItem)
         {
             data.Add(newItem);
         }
 
-        // Удаление товара по индексу
-        public void RemoveItem(List<ItemModel> data, int index)
+        public void RemoveItem(List<ItemModel> data, ItemModel item)
         {
-            if (index >= 0 && index < data.Count) data.RemoveAt(index);
+            data.Remove(item);
         }
 
-        // Статистика
-        public int GetTotalQuantity(List<ItemModel> data) => data.Sum(x => x.Quantity);
-        public decimal GetTotalStockValue(List<ItemModel> data) => data.Sum(x => x.Price * x.Quantity);
-        public decimal GetAveragePrice(List<ItemModel> data) => data.Count > 0 ? data.Average(x => x.Price) : 0;
-        public decimal GetMaxPrice(List<ItemModel> data) => data.Count > 0 ? data.Max(x => x.Price) : 0;
-        public decimal GetMinPrice(List<ItemModel> data) => data.Count > 0 ? data.Min(x => x.Price) : 0;
-
-        // Поиск
         public List<ItemModel> Search(List<ItemModel> data, string query)
         {
             query = query.ToLower();
-            return data.Where(x => x.Name.ToLower().Contains(query) || x.Code.Contains(query)).ToList();
+            return data.Where(x =>
+                (x.Name != null && x.Name.ToLower().Contains(query)) ||
+                (x.Code != null && x.Code.ToLower().Contains(query))
+            ).ToList();
         }
 
-        // Фильтр по категории
         public List<ItemModel> FilterByCategory(List<ItemModel> data, string category)
         {
             if (category == "Все") return data;
             return data.Where(x => x.Category == category).ToList();
+        }
+
+        public int GetTotalQuantity(List<ItemModel> data) => data.Sum(x => x.Quantity);
+
+        public decimal GetTotalStockValue(List<ItemModel> data) => data.Sum(x => x.Price * x.Quantity);
+
+        public decimal GetAveragePrice(List<ItemModel> data) => data.Count > 0 ? data.Average(x => x.Price) : 0;
+
+        public decimal GetMaxPrice(List<ItemModel> data) => data.Count > 0 ? data.Max(x => x.Price) : 0;
+
+        public decimal GetMinPrice(List<ItemModel> data) => data.Count > 0 ? data.Min(x => x.Price) : 0;
+
+        public decimal GetPotentialProfit(List<ItemModel> data)
+        {
+            return data.Sum(x => (x.Price - x.PurchasePrice) * x.Quantity);
         }
     }
 }
